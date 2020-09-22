@@ -52,3 +52,6 @@ Mkfile.old
 dkms.conf
 
 Debug*
+/.metadata/
+.jxbrowser-data*
+.settings*

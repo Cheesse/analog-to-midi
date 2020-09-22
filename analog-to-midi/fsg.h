@@ -27,13 +27,13 @@
 #define STAGE3_INT   16
 #define STAGE3_PASS   1
 
-/* Normalized magnitude^2 frequency spectrum. */
-extern unsigned char spectrum[SPECTRUM_BINS];
-
 /* Initializes the Frequency Spectrum Generator. */
 void fsginit(void);
 
 /* Takes an ADC sample as input. */
 void fsgupdate(int x);
+
+/* Gets the magnitude^2 of a frequency bin, from 1 to N/2, of the generated spectrum. */
+unsigned char fsgbin(unsigned int bin);
 
 #endif /* FSG_H_ */

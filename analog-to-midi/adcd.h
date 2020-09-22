@@ -9,11 +9,13 @@
 #ifndef ADCD_H_
 #define ADCD_H_
 
+#define ADC_CHANNEL 0x00
 #define SAMPLE_RATE 25600
-
-typedef unsigned int sample;
 
 /* Initializes the ADC driver. */
 void adcinit(void);
+
+/* Collects a sample. */
+int adcsample(void);
 
 #endif /* ADCD_H_ */
