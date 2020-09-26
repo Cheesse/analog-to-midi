@@ -9,31 +9,27 @@
 #ifndef FSG_H_
 #define FSG_H_
 
-#define SPECTRUM_BINS 2048
+#define TOPSTAGE_SIZE 512
 
-#define STAGE_COUNT   4
-#define STAGE_BUFFERS 2
+#define SUBSTAGE_COUNT 2
+#define SUBSTAGE_SIZE 64
+#define SUBSTAGE1_INT 32
+#define SUBSTAGE0_INT 16
 
-#define STAGE0_SIZE 512
-#define STAGE0_INT  512
-#define STAGE0_PASS  16
-#define STAGE1_SIZE  64
-#define STAGE1_INT   64
-#define STAGE1_PASS   2
-#define STAGE2_SIZE  64
-#define STAGE2_INT   32
-#define STAGE2_PASS   2
-#define STAGE3_SIZE  64
-#define STAGE3_INT   16
-#define STAGE3_PASS   1
+/* Magnitude-squared frequency spectra for each stage. */
+extern unsigned char topspec[TOPSTAGE_SIZE / 2];
+extern unsigned char subspec[SUBSTAGE_COUNT][SUBSTAGE_SIZE / 2];
 
 /* Initializes the Frequency Spectrum Generator. */
 void fsginit(void);
 
-/* Takes an ADC sample as input. */
-void fsgupdate(int x);
+/* Regenerates the spectra of each stage. Called after a return from fsgwait(). */
+void fsgregen(void);
 
-/* Gets the magnitude^2 of a frequency bin, from 1 to N/2, of the generated spectrum. */
-unsigned char fsgbin(unsigned int bin);
+/* Takes an ADC sample as input and puts it in the topmost buffer. Updates the buffers of lower stages as appropriate. */
+inline void fsgupdate(int x);
+
+/* Waits until an FFT can be done. With the current configuration, all 3 stages will have their spectra regenerated at once. */
+void fsgwait(void);
 
 #endif /* FSG_H_ */

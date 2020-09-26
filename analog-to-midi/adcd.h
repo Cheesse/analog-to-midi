@@ -10,7 +10,7 @@
 #define ADCD_H_
 
 #define ADC_CHANNEL 0x00
-#define SAMPLE_RATE 25600
+#define SAMPLE_RATE 12800
 
 /* Initializes the ADC driver. */
 void adcinit(void);

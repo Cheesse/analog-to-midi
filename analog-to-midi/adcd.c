@@ -71,18 +71,21 @@ void adcinit(void) {
 
 /* Commands the ADC to take a sample. */
 int adcsample(void) {
+    static int x = 0x0000;
     /* Save interrupt state. */
     //unsigned int istate = __get_interrupt_state();
 
     /* Collect a sample and wait. */
-    ADC12CTL0 |= ADC12SC;
-    wait = 1;
-    while (wait);
+    //ADC12CTL0 |= ADC12SC;
+    //wait = 1;
+    //while (wait);
+    x ^= 0x7F00;
+    return x >> 2;
     //__low_power_mode_0();
 
     /* Restore interrupt state. */
     //__set_interrupt_state(istate);
-    return ADC12MEM0;
+    //return ADC12MEM0;
 }
 
 #pragma vector = ADC12_B_VECTOR
@@ -90,6 +93,7 @@ interrupt void ADCInterruptRoutine(void) {
     /* Wake the processor to start processing the sample. */
     //__low_power_mode_off_on_exit();
     wait = 0;
+    fsgupdate(ADC12MEM0);
     /* Clear flag to exit. */
     ADC12IFGR0 &= ~ADC12IFG0;
 }

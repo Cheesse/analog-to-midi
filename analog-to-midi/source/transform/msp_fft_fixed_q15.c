@@ -39,6 +39,7 @@
  */
 msp_status msp_fft_fixed_q15(const msp_fft_q15_params *params, int16_t *src)
 {
+    _q15 x_n2;
     msp_status status;                          // Status of the operations
     msp_split_q15_params paramsSplit;           // Split operation params
     msp_cmplx_fft_q15_params paramsCmplxFFT;    // Complex FFT params
@@ -54,10 +55,20 @@ msp_status msp_fft_fixed_q15(const msp_fft_q15_params *params, int16_t *src)
         return status;
     }
     
+    /* Determine the value of the N/2th bin before continuing, as this information gets lost.
+     * G_r(N/2) = X_r(0) - X_i(0); G_i(N/2) = 0. */
+    x_n2 = src[0] - src[1];
+
     /* Initialize split operation params structure. */
     paramsSplit.length = params->length;
     paramsSplit.twiddleTable = params->twiddleTable;
     
     /* Perform the last stage split operation to obtain N/2 complex FFT results. */
-    return msp_split_q15(&paramsSplit, src);
+    status = msp_split_q15(&paramsSplit, src);
+
+    /* Replace the 0th bin's imaginary value with the N/2th bin value. G_i(0) = 0 always for real input. */
+    /* ^ We could do that but it's unnecessary; just replace the real value for simplicity since we don't need the 0th bin. */
+    src[0] = x_n2;
+
+    return status;
 }

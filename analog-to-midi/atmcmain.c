@@ -16,13 +16,15 @@ void init(void) {
     FRCTL0_L |= NWAITS1;
 
     /* Increase MCU clock rate from 8 MHz to 16 MHz. */
-    CSCTL0 = CSKEY; // Unlock CS registers
-    CSCTL1 = DCORSEL | DCOFSEL_4;
-    CSCTL3 &= ~DIVM;
-    CSCTL0_H = 0; // Lock CS registers
+    CSCTL0 = CSKEY; /* Unlock CS registers. */
+    CSCTL1 = DCORSEL | DCOFSEL_4; /* Increase DCOSC clock speed. */
+    CSCTL3 &= ~(DIVM); /* Set MCLK divider to 1. */
+    CSCTL0_H = 0; /* Lock CS registers. */
 
-    WDTCTL = WDTPW | WDTHOLD; // Stop WDT
+    /* Stop WDT. */
+    WDTCTL = WDTPW | WDTHOLD;
 
+    /* Set unused I/O ports to output. */
     P1DIR = 0xFF;
     P2DIR = 0xFF;
     P3DIR = 0xFF;
@@ -35,9 +37,9 @@ void init(void) {
     PBDIR = 0xFF;
     PCDIR = 0xFF;
     PDDIR = 0xFF;
-
     PM5CTL0 &= ~LOCKLPM5;
-    _enable_interrupts();
+
+    __enable_interrupt();
 }
 
 void main(void) {
