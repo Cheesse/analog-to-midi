@@ -6,253 +6,292 @@
  *      Author: Andrew Obeso
  */
 
-/* TODO: Modify LEA DSPLib code so that the 0th FFT bin is replaced with the N/2th bin. */
+//#include "adc.h"
+#include "config.h"
+#include "defs.h"
 
+#include "cpu.h"
 #include "fsg.h"
-#include "midiout.h"
+
+#define GLOBAL_Q 15
+#define GLOBAL_IQ 30
+#include "IQmathLib.h"
+#include "QmathLib.h"
 #include "DSPLib.h"
 
-typedef unsigned char _uq8;
+/*
+#include <stdint.h>
+#include <stdbool.h>
 
-/* FSG Top Stage */
-typedef struct {
-    unsigned int cur;
-    unsigned int i;
-    _q15 *buf[2];
-    const msp_fft_q15_params txfm;
-} fsgtop;
+#include "DSPLib_types.h"
+#include "DSPLib_support.h"
+#include "DSPLib_filter.h"
+#include "DSPLib_transform.h"
+*/
 
-/* FSG Substage */
-typedef struct {
-    unsigned int cur;
-    const unsigned int max;
-    _q15 *buf[2];
-    const msp_biquad_df1_q15_params iir;
-} fsgsub;
-
-/* Top Stage's LEA Memory. */
+/* LEA MEMORY */
 
 /* Sample buffers. */
-DSPLIB_DATA(topbuf0, MSP_ALIGN_FFT_Q15(TOPSTAGE_SIZE))
-static _q15 topbuf0[TOPSTAGE_SIZE];
-DSPLIB_DATA(topbuf1, MSP_ALIGN_FFT_Q15(TOPSTAGE_SIZE))
-static _q15 topbuf1[TOPSTAGE_SIZE];
+DSPLIB_DATA(iirout, FSG_TOPSTAGE_SIZE * 2)
+static _q15 iirout[FSG_TOPSTAGE_SIZE];
 
-/* Substage 1's LEA Memory. */
+DSPLIB_DATA(topbuf0, MSP_ALIGN_FFT_Q15(FSG_TOPSTAGE_SIZE))
+static _q15 topbuf0[FSG_TOPSTAGE_SIZE];
+DSPLIB_DATA(topbuf1, MSP_ALIGN_FFT_Q15(FSG_TOPSTAGE_SIZE))
+static _q15 topbuf1[FSG_TOPSTAGE_SIZE];
 
-/* Sample buffers. */
-DSPLIB_DATA(sub1buf0, MSP_ALIGN_FFT_Q15(SUBSTAGE_SIZE))
-static _q15 sub1buf0[SUBSTAGE_SIZE];
-DSPLIB_DATA(sub1buf1, MSP_ALIGN_FFT_Q15(SUBSTAGE_SIZE))
-static _q15 sub1buf1[SUBSTAGE_SIZE];
+DSPLIB_DATA(sub1buf, MSP_ALIGN_FFT_Q15(FSG_SUBSTAGE_SIZE))
+static _q15 sub1buf[FSG_SUBSTAGE_SIZE];
+
+DSPLIB_DATA(sub0buf, MSP_ALIGN_FFT_Q15(FSG_SUBSTAGE_SIZE))
+static _q15 sub0buf[FSG_SUBSTAGE_SIZE];
 
 /* IIR filter coefficients. */
-DSPLIB_DATA(sub1fc, 4)
-static const msp_biquad_df1_q15_coeffs sub1fc = { };
-
-/* IIR filter states. */
-DSPLIB_DATA(sub1fs, 4)
-static msp_biquad_df1_q15_states sub1fs;
-
-/* Stage 0's LEA Memory. */
-
-/* Sample buffers. */
-DSPLIB_DATA(sub0buf0, MSP_ALIGN_FFT_Q15(SUBSTAGE_SIZE))
-static _q15 sub0buf0[SUBSTAGE_SIZE];
-DSPLIB_DATA(sub0buf1, MSP_ALIGN_FFT_Q15(SUBSTAGE_SIZE))
-static _q15 sub0buf1[SUBSTAGE_SIZE];
-
-/* IIR filter coefficients. */
-DSPLIB_DATA(sub0fc, 4)
-static const msp_biquad_df1_q15_coeffs sub0fc = { };
-
-/* IIR filter states. */
-DSPLIB_DATA(sub0fs, 4)
-static msp_biquad_df1_q15_states sub0fs;
-
-/* IIR filter output buffer. Shared among substages. */
-DSPLIB_DATA(iirout, TOPSTAGE_SIZE / 2* 2)
-static _q15 iirout[TOPSTAGE_SIZE / 2];
-
-/* Top stage. */
-static fsgtop top = { 0, 0, { topbuf0, topbuf1 }, { TOPSTAGE_SIZE, true } };
-
-/* Substages. */
-static fsgsub sub[SUBSTAGE_COUNT] = {
-    { 0, SUBSTAGE0_INT, { sub0buf0, sub0buf1 }, { SUBSTAGE_SIZE, &sub0fc, &sub0fs } },
-    { 0, SUBSTAGE1_INT, { sub1buf0, sub1buf1 }, { TOPSTAGE_SIZE, &sub1fc, &sub1fs } }
+DSPLIB_DATA(topfc, 4)
+static const msp_biquad_df1_q15_coeffs topfc = {
+    .b0 = _Q15(0.098806456449613),
+    .b1By2 = _Q15(-0.188330247089721/2),
+    .b2 = _Q15(0.098806456449613),
+    .a1By2 = _Q15(1.921409969623980/2),
+    .a2 = _Q15(-0.937917143103297)
 };
 
-/* Substage FFT parameters. */
-static const msp_fft_q15_params subtxfm = { SUBSTAGE_SIZE, true };
+DSPLIB_DATA(subfc, 4)
+static const msp_biquad_df1_q15_coeffs subfc = {
+    .b0 = _Q15(0.176395745023128),
+    .b1By2 = _Q15(0.228176245840090/2),
+    .b2 = _Q15(0.176395745023128),
+    .a1By2 = _Q15(0.697776133688823/2),
+    .a2 = _Q15(-0.518414872842765)
+};
 
-/* Stage magnitude-squared spectra. */
-unsigned char topspec[TOPSTAGE_SIZE / 2];
-unsigned char subspec[SUBSTAGE_COUNT][SUBSTAGE_SIZE / 2];
+/* IIR filter states. */
+DSPLIB_DATA(topfs, 4)
+static msp_biquad_df1_q15_states topfs;
 
+DSPLIB_DATA(subfs, 4)
+static msp_biquad_df1_q15_states subfs;
+
+/* Multiply-Accumulate output. */
+DSPLIB_DATA(macout, 4);
+static _iq31 macout;
+
+/* NORMAL MEMORY */
+
+/* Gets the frame size of a substage. */
+#define subframe(substage) (FSG_SUBSTAGE_SIZE >> (FSG_SUBSTAGE_COUNT - (substage)))
+
+/* IIR info. */
+static const msp_biquad_df1_q15_params subiir[FSG_SUBSTAGE_COUNT] = {
+    { subframe(1), &subfc, &subfs },
+    { FSG_TOPSTAGE_SIZE, &topfc, &topfs }
+};
+
+/* Substages. */
+static _q15 subbackbuf[FSG_SUBSTAGE_COUNT][FSG_SUBSTAGE_SIZE];
+//static const unsigned int submax[FSG_SUBSTAGE_COUNT] = { FSG_SUBSTAGE0_FRAME, FSG_SUBSTAGE1_FRAME };
+static _q15 *const subfrontbuf[FSG_SUBSTAGE_COUNT] = { sub0buf, sub1buf };
+
+/* Top stage. */
+static _q15 *const topbuf[2] = { topbuf0, topbuf1 };
+static volatile unsigned int topcur = 0;
 static volatile int wait;
 
-/* Find the magnitude squared of a complex number. Input must be from a sample/spectrum buffer. In-place operation. */
-static inline _uq8 abs2(_q15 *cplx) {
-    msp_status leastatus;
-    _iq31 *macout = (_iq31*)cplx;
-    static const msp_mac_q15_params p = { 2 };
+unsigned int framerms;
 
-    leastatus = msp_mac_q15(&p, cplx, cplx, macout);
-    msp_checkStatus(leastatus);
-
-    return (_uq8)((*macout >> (24 - 1)) & 0xFF); /* Ignore sign bit since we know the result is always positive. */
-}
+/* Frequency spectra. */
+unsigned char subspec[FSG_SUBSTAGE_COUNT][FSG_SUBSTAGE_SIZE / 2];
+unsigned char topspec[FSG_TOPSTAGE_SIZE / 2];
 
 /* Calculate the average of several numbers. */
-static inline _q15 avg(_q15 *a, unsigned int ctexp) {
-    unsigned int count;
-    _q15 sum = 0;
+FASTFUNC static _q15 avg(const _q15 *a, unsigned int count, unsigned int exponent) {
+    _iq31 sum;
 
-    count = 1 << ctexp;
-    while (count) sum += a[--count] >> ctexp;
+    sum = 0;
+    while (count--) sum += (_iq31)a[count];
 
-    return sum;
+    return (_q15)(sum >> exponent);
+}
+
+/* Clamped Left Shift. */
+FASTFUNC static _q15 clsh(_q15 a, unsigned int shift) {
+    _q15 b;
+
+    b = a & 0x8000;
+    a <<= shift;
+
+    if ((a & 0x8000) ^ b) a = b ? 0x8000 : 0x7FFF;
+
+    return a;
+}
+
+/* Calculate the RMS of a 512-sample buffer. The input must be in LEA memory (for now).*/
+static FASTFUNC _uq15 rms(const _q15 *in) {
+    static const msp_shift_q15_params shift = { FSG_TOPSTAGE_SIZE, -FSG_TOPSTAGE_SIZE_EXP };
+    static const msp_mac_q15_params mac = { FSG_TOPSTAGE_SIZE };
+    msp_status leastatus;
+
+    leastatus = msp_shift_q15(&shift, in, iirout);
+    msp_checkStatus(leastatus);
+
+    leastatus = msp_mac_q15(&mac, iirout, iirout, &macout);
+    msp_checkStatus(leastatus);
+
+    return _IQsqrt(macout >> 1) >> (16 - 1 - 1);
 }
 
 /* Regenerates a substage's magnitude-squared frequency spectrum. */
-static inline void subregen(unsigned int substage) {
+static FASTFUNC void subregen(unsigned int substage) {
+    static const msp_fft_q15_params fft = { FSG_SUBSTAGE_SIZE, true };
     msp_status leastatus;
-    unsigned int i;
-    fsgsub *s = sub + substage;
+    unsigned int i, j;
+    _q15 a, *b;
+    unsigned char *s;
 
-    /* Show current status of buffer. */
-    P1OUT ^= BIT1;
-    i = subtxfm.length;
-    while (i--) {
-        int y = s->buf[s->cur][i];
-        if (y < 0) midisend((_uq8)(((y + 0x80) & 0xFF00) >> 8));
-        else midisend((_uq8)((y & 0xFF00) >> 8));
-        midiwait();
-    }
-
-    /* Pause to allow user to inspect. */
-    while (P5IN & BIT6);
+    b = subfrontbuf[substage];
 
     /* Now do the FFT. */
-    leastatus = msp_fft_fixed_q15(&subtxfm, s->buf[s->cur]);
+    leastatus = msp_fft_fixed_q15(&fft, b);
     msp_checkStatus(leastatus);
 
-    /* Show current status of spectrum. */
-    P1OUT ^= BIT1;
-    i = subtxfm.length;
-    while (i--) {
-        int y = s->buf[s->cur][i];
-        if (y < 0) midisend((_uq8)(((y + 0x80) & 0xFF00) >> 8));
-        else midisend((_uq8)((y & 0xFF00) >> 8));
-        midiwait();
-    }
-
-    /* Pause to allow user to inspect. */
-    while (P5IN & BIT6);
+    /* Boost values. */
+    i = FSG_SUBSTAGE_SIZE;
+    while (i--) b[i] = clsh(b[i], 1);
 
     /* Write to the substage's spectrum. */
-    i = subtxfm.length >> 1;
-    while (i--) subspec[substage][i] = abs2(s->buf[s->cur] + (i << 1));
-
-    /* Swap buffers. */
-    s->cur ^= 1;
+    s = subspec[substage];
+    i = FSG_SUBSTAGE_SIZE / 2;
+    j = FSG_SUBSTAGE_SIZE;
+    while (i--) {
+        j -= 2;
+        a = _Qmag(b[j], b[j + 1]);
+        s[i] = (unsigned char)(a >> (8 - 1));
+    }
 }
 
 /* Updates a substage based on the source buffer. */
-static inline void subupdate(unsigned int substage, _q15 *src) {
+static FASTFUNC void subupdate(unsigned int substage, const _q15 *src) {
     msp_status leastatus;
-    unsigned int i, exp;
-    fsgsub *s = sub + substage;
+    static const unsigned int subdownsample[FSG_SUBSTAGE_COUNT] = {
+        subframe(1) / subframe(0),
+        FSG_TOPSTAGE_SIZE / subframe(1)
+    };
+    static const unsigned int subdownsampleexp[FSG_SUBSTAGE_COUNT] = { 1, 4 };
+    unsigned int a, d, e, i, j, m;
+    _q15 *b, *f;
+    const msp_biquad_df1_q15_params *iir;
+
+    iir = subiir + substage;
+    b = subbackbuf[substage];
+    f = subfrontbuf[substage];
+    j = iir->length;
+    m = subframe(substage);
+    e = subdownsampleexp[substage];
+    d = FSG_SUBSTAGE_SIZE - m;
+    a = subdownsample[substage];
 
     /* Send the source buffer the low-pass filter. */
-    leastatus = msp_biquad_df1_q15(&s->iir, src, iirout);
+    leastatus = msp_biquad_df1_q15(iir, src, iirout);
     msp_checkStatus(leastatus);
 
-    /* Get the downsample factor's exponent. */
-    i = s->iir.length;
-    exp = 1;
-    while (i != subtxfm.length) {
-        i >>= 1;
-        exp++;
+    /* Shift the contents of the back buffer. */
+    for (i = 0; i != d; i++) b[i] = b[i + m];
+
+    /* Copy the IIR output at specific intervals. */
+    i = m;
+    while(i--) {
+        j -= a;
+        //b[d + i] = iirout[j];
+        b[d + i] = avg(iirout + j, a, e);
     }
 
-    /* Now write to the buffer. */
-    i = subtxfm.length >> 1;
-    while(i--) s->buf[s->cur][s->max + i] = s->buf[s->cur ^ 1u][i] = avg(iirout + (i << exp), exp);
+    /* Copy the data to the front buffer with boost. */
+    i = FSG_SUBSTAGE_SIZE;
+    while (i--) f[i] = clsh(b[i], (FSG_SUBSTAGE_COUNT - 1) - substage);
 }
 
 /* Regenerates the top stage's magnitude-squared frequency spectrum. */
-static inline void topregen(void) {
-    unsigned int i;
+static FASTFUNC void topregen(void) {
+    static const msp_fft_q15_params fft = { FSG_TOPSTAGE_SIZE, true };
     msp_status leastatus;
+    unsigned int i, j;
+    _q15 a;
+    _q15 *b;
 
-    /* Show current status of buffer. */
-    P1OUT ^= BIT1;
-    i = top.txfm.length;
-    while (i--) {
-        int y = top.buf[top.cur ^ 1][i];
-        if (y < 0) midisend((_uq8)(((y + 0x80) & 0xFF00) >> 8));
-        else midisend((_uq8)((y & 0xFF00) >> 8));
-        midiwait();
-    }
-
-    /* Pause to allow user to inspect. */
-    while (P5IN & BIT6);
+    b = topbuf[topcur ^ 1];
 
     /* Now do the FFT. */
-    leastatus = msp_fft_fixed_q15(&top.txfm, top.buf[top.cur ^ 1]);
+    leastatus = msp_fft_fixed_q15(&fft, b);
     msp_checkStatus(leastatus);
 
-    /* Show current status of spectrum. */
-    P1OUT ^= BIT1;
-    i = top.txfm.length;
-    while (i--) {
-        int y = top.buf[top.cur ^ 1][i];
-        if (y < 0) midisend((_uq8)(((y + 0x80) & 0xFF00) >> 8));
-        else midisend((_uq8)((y & 0xFF00) >> 8));
-        midiwait();
-    }
-
-    /* Pause to allow user to inspect. */
-    while (P5IN & BIT6);
+    /* Boost values. */
+    i = FSG_SUBSTAGE_SIZE;
+    while (i--) b[i] = clsh(b[i], 1);
 
     /* Write to the top stage's spectrum. */
-    i = top.txfm.length >> 1;
-    while (i--) topspec[i] = abs2(top.buf[top.cur ^ 1] + (i << 1));
+    i = FSG_TOPSTAGE_SIZE / 2;
+    j = FSG_TOPSTAGE_SIZE;
+    while (i--) {
+        j -= 2;
+        a = _Qmag(b[j], b[j + 1]);
+        topspec[i] = (unsigned char)(a >> (8 - 1));
+    }
 }
 
-void fsginit(void) {
-    /* Initialize stages. Nothing to do for now. */
+#if DEBUG_FSG_PRINT == 1
+unsigned char* fsggetsub(unsigned int substage) { return subfrontbuf[substage]; }
+
+unsigned char* fsggettop(void) { return topbuf[topcur ^ 1]; }
+#endif /* DEBUG_FSG_PRINT == 1 */
+
+void fsgprep(void) {
+    const _q15 *b;
+    unsigned int i;
+
+    /* Set frame's RMS value. */
+    b = topbuf[topcur ^ 1];
+    framerms = rms(b);
+
+    /* Update lower stages. */
+    if (FSG_SUBSTAGE_COUNT) {
+        i = FSG_SUBSTAGE_COUNT - 1;
+        subupdate(i, b);
+        while (i--) subupdate(i, subfrontbuf[i + 1] + FSG_SUBSTAGE_SIZE - subframe(i + 1));
+    }
 }
 
 void fsgregen(void) {
     unsigned int i;
 
-    /* Update lower stages first. */
-    i = SUBSTAGE_COUNT;
-    while (i--) subupdate(i, i == (SUBSTAGE_COUNT - 1) ? top.buf[top.cur ^ 1] : sub[i + 1].buf[sub[i + 1].cur]);
-
     /* Now do the FFTs. */
     topregen();
 
-    i = SUBSTAGE_COUNT;
+    i = FSG_SUBSTAGE_COUNT;
     while (i--) subregen(i);
 }
 
-inline void fsgupdate(int x) {
-    /* Append sample to top sample buffer. */
-    top.buf[top.cur][top.i] = x;
+int fsgsync(int x) {
+    static unsigned int n = 0;
+
+    /* Shift, boost, and clamp. */
+    x += 0x2800;
+
+    topbuf[topcur][n] = clsh(x, 2);
 
     /* Increment sample buffer index. */
-    top.i++;
+    n = (n + 1) & (FSG_TOPSTAGE_SIZE - 1);
 
-    /* Wake main thread if the buffer is full. */
-    if (top.i == TOPSTAGE_SIZE) {
-        top.cur ^= 1;
+    /* Update the entire FSG if the buffer is full. */
+    if (!n) {
+        topcur ^= 1;
+        wait = 0;
+        return 1;
     }
+
+    return 0;
 }
 
 void fsgwait(void) {
-    while (wait) __low_power_mode_0();
+    wait = 1;
+    cpuwait(&wait);
 }

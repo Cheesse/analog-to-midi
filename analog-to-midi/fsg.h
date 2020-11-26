@@ -9,27 +9,31 @@
 #ifndef FSG_H_
 #define FSG_H_
 
-#define TOPSTAGE_SIZE 512
+/* RMS of the current frame's waveform. */
+extern unsigned int framerms;
 
-#define SUBSTAGE_COUNT 2
-#define SUBSTAGE_SIZE 64
-#define SUBSTAGE1_INT 32
-#define SUBSTAGE0_INT 16
+/* Frequency spectra for each stage. */
+extern unsigned char topspec[FSG_TOPSTAGE_SIZE / 2];
+extern unsigned char subspec[FSG_SUBSTAGE_COUNT][FSG_SUBSTAGE_SIZE / 2];
 
-/* Magnitude-squared frequency spectra for each stage. */
-extern unsigned char topspec[TOPSTAGE_SIZE / 2];
-extern unsigned char subspec[SUBSTAGE_COUNT][SUBSTAGE_SIZE / 2];
+#if DEBUG_FSG_PRINT == 1
+/* Returns the pointer to the substage buffer. */
+inline unsigned char* fsggetsub(unsigned int substage);
 
-/* Initializes the Frequency Spectrum Generator. */
-void fsginit(void);
+/* Returns the pointer to the top stage buffer. */
+inline unsigned char* fsggettop(void);
+#endif /* DEBUG_FSG_PRINT == 1 */
 
-/* Regenerates the spectra of each stage. Called after a return from fsgwait(). */
-void fsgregen(void);
+/* Passes the top stage sample buffer through the IIR filters to the substages. Call this before calling fsgregen. */
+FASTFUNC void fsgprep(void);
+
+/* Regenerates the spectra of each stage. Called after a return from fsgprep. */
+FASTFUNC void fsgregen(void);
 
 /* Takes an ADC sample as input and puts it in the topmost buffer. Updates the buffers of lower stages as appropriate. */
-inline void fsgupdate(int x);
+RAMFUNC int fsgsync(int x);
 
-/* Waits until an FFT can be done. With the current configuration, all 3 stages will have their spectra regenerated at once. */
-void fsgwait(void);
+/* Waits until the spectra are ready to be regenerated.  Call fsgprep after returning from this function. */
+inline void fsgwait(void);
 
 #endif /* FSG_H_ */
