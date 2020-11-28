@@ -43,7 +43,7 @@ static unsigned char curbf = 0;
 /* Sends a Note On message for the given note. */
 #define send(note, vel) buf[chars++] = ((unsigned char)note); buf[chars++] = (vel)
 
-void midigen(const char *const *data) {
+void midigen(void) {
     unsigned int i;
     unsigned char a;
 

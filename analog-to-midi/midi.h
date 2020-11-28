@@ -12,7 +12,7 @@
 #define MIDI_NOTE_COUNT 128
 
 /* Generates the next chunk of data based on the given data from the note detection algorithm. */
-FASTFUNC void midigen(const char *const *data);
+FASTFUNC void midigen(void);
 
 /* Initializes the MIDI stream generator. */
 inline void midiinit(void);

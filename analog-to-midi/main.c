@@ -156,7 +156,7 @@ void main(void) {
         //uatouts("\x3C\x7F", 2);
         setSpectrum(topspec, subspec[1], subspec[0]);
         generateOutput();
-        midigen(output);
+        midigen();
         midiout();
 
 #if DEBUG_FSG_PRINT == 1
