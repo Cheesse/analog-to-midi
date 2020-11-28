@@ -263,7 +263,7 @@ void generateAggregateSpec(void){
         aggregate[i] =  spectrum2[i-32];
     }
 
-    int max = 20;
+    int max = 16;
 
     for(i = 0; i < 256; i++){
         if(aggregate[i] > max){
@@ -273,7 +273,7 @@ void generateAggregateSpec(void){
 
     int shiftNum = 0;
 
-    if(max != 20){
+    if(max != 16){
         while(max < 70){
             max = max << 1;
             shiftNum++;
@@ -443,16 +443,16 @@ void generateHPS(void){
     }
 
     for(i = 12; i < 21;i++){
-        HPS[i] = magFloor(HPS[i] >> 2);
+        HPS[i] = magFloor(HPS[i] >> 4);
     }
 
     for(i = 0; i < 36; i++){
         HPS[i] = magFloor(HPS[i] >> 2);
     }
 
-    for(i = 36; i < 88; i++){
+    /*for(i = 36; i < 88; i++){
         HPS[i] = magFloor(HPS[i] >> 1);
-    }
+    }*/
 
     for(i = 32; i < 47; i++){
         HPS[i] = magFloor(HPS[i] >> 3);
@@ -536,25 +536,25 @@ void generateHPS(void){
     }
 
     for(i = 12; i < 15;i++){
-        HPS[i] = magFloor(HPS[i] >> 2);
+        HPS[i] = magFloor(HPS[i] >> 3);
     }
 
     for(i = 15; i < 17;i++){
-        HPS[i] = magFloor(HPS[i] >> 1);
+        HPS[i] = magFloor(HPS[i] >> 2);
     }
 
     for(i = 0; i < 36; i++){
         HPS[i] = magFloor(HPS[i] >> 2);
     }
 
-    for(i = 36; i < 88; i++){
+    /*for(i = 36; i < 88; i++){
         HPS[i] = magFloor(HPS[i] >> 1);
-    }
+    }*/
 
-    HPS[47] = magFloor(HPS[47] >> 3);
+    HPS[47] = magFloor(HPS[47] >> 6);
 
     for(i = 48; i < 88; i++){
-        HPS[i] = magFloor(HPS[i] >> 7);
+        HPS[i] = magFloor(HPS[i] >> 10);
     }
 
     for(i = 1; i < 88; i++){
@@ -647,11 +647,26 @@ void generateHPS(void){
 
     HPS[31] = magFloor(HPS[31] >> 1);
 
-    for(i = 32; i < 47; i+=2){
+    /*for(i = 32; i < 47; i+=2){
         HPS[i] = magFloor(HPS[i] >> 1);
+    }*/
+
+    for(i = 43; i < 48; i++){
+        HPS[i] =  magFloor(HPS[i] >> 1);
+    }
+
+    for(i = 31; i < 34; i++){
+        HPS[i] =  magFloor(HPS[i] << 1);
     }
 
     HPS[48] = magFloor(HPS[48] >> 2);
+
+    for(i = 19; i < 24; i++){
+        HPS[i] = magFloor(HPS[i] >> 1);
+    }
+
+    HPS[26] = magFloor(HPS[26] >> 2);
+    HPS[27] = magFloor(HPS[27] >> 2);
 }
 
 void detectOutput(void){
