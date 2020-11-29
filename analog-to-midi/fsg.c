@@ -245,8 +245,13 @@ unsigned char* fsggettop(void) { return topbuf[topcur ^ 1]; }
 #endif /* DEBUG_FSG_PRINT == 1 */
 
 void fsgprep(void) {
-    const _q15 *b;
+    _q15 *b;
     unsigned int i;
+
+    /* Shift, boost, and clamp all samples. */
+    b = topbuf[topcur ^ 1];
+    i = FSG_TOPSTAGE_SIZE;
+    while (i--) b[i] = clsh(b[i] + 0x2800, 2);
 
     /* Set frame's RMS value. */
     b = topbuf[topcur ^ 1];
@@ -273,10 +278,7 @@ void fsgregen(void) {
 int fsgsync(int x) {
     static unsigned int n = 0;
 
-    /* Shift, boost, and clamp. */
-    x += 0x2800;
-
-    topbuf[topcur][n] = clsh(x, 2);
+    topbuf[topcur][n] = x;
 
     /* Increment sample buffer index. */
     n = (n + 1) & (FSG_TOPSTAGE_SIZE - 1);

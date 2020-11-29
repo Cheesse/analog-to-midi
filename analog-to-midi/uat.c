@@ -14,7 +14,7 @@
 
 #include <msp430.h>
 
-#define MAX_CHARS 16
+#define MAX_CHARS 64
 
 static volatile int wait = 0;
 
@@ -25,7 +25,6 @@ static volatile unsigned char index = 0, count = 0;
 
 /* Sets the baud rate based on the configuration. Assumes the source clock is ACLK @ 500 kHz. */
 static inline void setbaud(void) {
-#if UAT_BAUD_RATE == 31250
     /* UCA1BRW: eUSCI A1 Baud Rate Control Register.
      *  UCBR (Clock Prescaler) = SMCLK_FREQ / UAT_BAUD_RATE / 16 */
     UCA1BRW = SMCLK_FREQ / UAT_BAUD_RATE / 16;
@@ -35,9 +34,6 @@ static inline void setbaud(void) {
      *  UCBRF  (1st Modulation Stage) = SMCLK_FREQ / UAT_BAUD_RATE % 16
      *  UCOS16 (Oversampling Mode)    = 1 (Enabled) */
     UCA1MCTLW = (UAT_BAUD_MOD << 8) | ((SMCLK_FREQ / UAT_BAUD_RATE % 16) << 4) | UCOS16_1;
-#else
-#error "UAT baud rate not set to a predefined value. "
-#endif /* UAT_BAUD_RATE */
 }
 
 void uatenable(void) {
@@ -45,10 +41,38 @@ void uatenable(void) {
     UCA1CTLW0 &= ~UCSWRST;
 
     /* Enable interrupts. (Must be done after.) */
-    UCA1IE_L = UCTXIE;
+    UCA1IE_L = UCTXCPTIE;
 }
 
 void uatinit(void) {
+    /* First set up the sample-and-hold timer. We can use the TA0 CCR1 timer. */
+
+    /* TA0CCR0: Timer A Capture/Compare Register 0. */
+    //TA1CCR0 = SMCLK_FREQ / UAT_BAUD_RATE / 16;
+
+    /* TA0CCTL1: Timer A0 Capture/Compare Control Register
+     *  CM     (Capture Mode) = 0 (None)
+     *  CCIS   (Input Select)         = 0 (CCI1A/TA0.1)
+     *  SCS    (Capture Source Sync)  = X (Don't care)
+     *  SCCI   (C/C Input Sync)       = X (Don't care)
+     *  CAP    (Capture/Compare Mode) = 0 (Compare)
+     *  OUTMOD (Output Mode)          = 4 (Toggle)
+     *  CCIE   (C/C Interrupt Enable) = 0 (No)
+     *  CCI    (C/C Input)            = X (Don't care)
+     *  OUT    (Output Mode)          = X (Don't care)
+     *  COV    (Capture Overflow)     = X (Don't care)
+     *  CCIFG (C/C Interrupt Flag)    = X (Don't care) */
+    //TA0CCTL1 = CM_0 | CCIS_0 | CAP_0 | OUTMOD_4 | CCIE_0;
+
+    /* TA0CTL: Timer A0 Control Register.
+     *  TASSEL (Clock Source Select) = 2 (SMCLK)
+     *  ID     (Input Clock Divider) = 0 (1)
+     *  MC     (Mode Control)        = 0 (Stop mode)
+     *  TACLR  (Clear Timer)         = X (Don't care)
+     *  TAIE   (Interrupt Enable)    = 0 (No)
+     *  TAIFG  (Interrupt Flag)      = X (Don't care) */
+    //TA0CTL = TASSEL_2 | ID_0 | MC_0 | TAIE_0;
+
     /* UCA1CTLW0: eUSCI A1 Control Register 0.
      *  UCPEN    (Parity Enable)     = 0 (Disabled)
      *  UCPAR    (Parity Select)     = X (Don't care)
@@ -83,7 +107,7 @@ int uatoutc(char c) {
 
     if (count == MAX_CHARS) {
         /* Re-enable interrupts. */
-        UCA1IE_L = UCTXIE;
+        UCA1IE_L = UCTXCPTIE;
 
         return 1;
     }
@@ -97,7 +121,7 @@ int uatoutc(char c) {
     }
 
     /* Re-enable interrupts. */
-    UCA1IE_L = UCTXIE;
+    UCA1IE_L = UCTXCPTIE;
 
     return 0;
 }
@@ -111,7 +135,7 @@ int uatouts(const char *s, unsigned int n) {
     a = count + n;
     if (a >= MAX_CHARS) {
         /* Re-enable interrupts. */
-        UCA1IE_L = UCTXIE;
+        UCA1IE_L = UCTXCPTIE;
 
         return 1;
     }
@@ -127,7 +151,7 @@ int uatouts(const char *s, unsigned int n) {
     }
 
     /* Re-enable interrupts. */
-    UCA1IE_L = UCTXIE;
+    UCA1IE_L = UCTXCPTIE;
 
     return 0;
 }
@@ -140,11 +164,14 @@ RAMFUNC interrupt void EUSCIA1InterruptRoutine(void) {
         count--;
         index = clamp(index + 1);
 
-        if (count) UCA1TXBUF = buffer[index];
+        if (count) {
+            UCA1TXBUF = buffer[index];
+            UCA1IFG &= ~UCTXCPTIFG;
+        }
         else {
             wait = 0;
-            UCA1IFG &= ~UCTXIFG;
+            UCA1IFG &= ~UCTXCPTIFG;
             __low_power_mode_off_on_exit();
         }
-    } else UCA1IFG &= ~UCTXIFG;
+    } else UCA1IFG &= ~UCTXCPTIFG;
 }

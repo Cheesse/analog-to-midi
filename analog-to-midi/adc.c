@@ -115,7 +115,7 @@ void adcinit(adcfunc callback) {
      *  ADC12RES (Resolution)   = 2 (12-bit)
      *  ADC12DF  (Data Format)  = 1 (Signed left-aligned)
      *  ADC12PWRMD (Power Mode) = 1 (Low power) */
-    ADC12CTL2 = ADC12RES_2 | ADC12DF_1 | ADC12PWRMD_1;
+    ADC12CTL2 = ADC12RES_2 | ADC12DF_1 | ADC12PWRMD_0;
 
     /* ADC12CTL1: ADC Control Register 1.
      *  ADC12PDIV   (Predivider)      = 0 (Divide by 1)

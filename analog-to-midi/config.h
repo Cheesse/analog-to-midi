@@ -21,6 +21,9 @@
 
 /* CLOCK */
 
+/* Whether to use the DCOSC or MODOSC oscillators. */
+#define SMCLK_USE_DCOSC 1
+
 /* Subsystem master clock division exponent (max 5). The frequency of the subsystem master clock is 5 MHz >> SMCLK_DIV_EXP. */
 #define SMCLK_DIV_EXP 2
 
@@ -84,9 +87,11 @@
 
 /* Baud rate of the UAT. Valid values are only 31250. */
 #define UAT_BAUD_RATE 31250
+//#define UAT_BAUD_RATE 32258
 
 /* Special modulation pattern for the baud rate generator. Refer to the datasheet to determine the correct value. */
-#define UAT_BAUD_MOD 0x52
+//#define UAT_BAUD_MOD 0x52
+#define UAT_BAUD_MOD 0x00
 
 /* SPI */
 

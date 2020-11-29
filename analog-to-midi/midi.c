@@ -20,7 +20,7 @@ static unsigned int chars = 0;
 static unsigned char notes[2][MIDI_NOTE_COUNT / 8];
 
 /* MIDI output buffer. */
-static char buf[MIDI_POLYPHONY * 2 * 2];
+static char buf[MIDI_POLYPHONY * 2 * 2 * 2];
 
 /* Current bitfield used to hold old notes. */
 static unsigned char curbf = 0;
@@ -29,7 +29,7 @@ static unsigned char curbf = 0;
 #define oldnotes (notes[curbf])
 
 /* Clears all bits in a bitfield. */
-#define bfclr(bfptr) i = MIDI_NOTE_COUNT / 8 / 2; while (i--) ((unsigned int*)bfptr)[i] = 0;
+#define bfclr(bfptr) i = MIDI_NOTE_COUNT / 8; while (i--) (bfptr)[i] = 0
 
 /* Gets a bit in a bitfield. */
 #define bfget(bfptr, bitnum) ((bfptr)[(bitnum) >> 3] & (1 << ((bitnum) & (8 - 1))))

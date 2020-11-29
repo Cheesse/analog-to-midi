@@ -16,7 +16,11 @@
 #define MODOSC_FREQ 4800000
 
 /* Subsystem master clock. */
+#if SMCLK_USE_DCOSC
+#define SMCLK_FREQ (MCLK_FREQ >> SMCLK_DIV_EXP)
+#else
 #define SMCLK_FREQ (MODOSC_FREQ >> SMCLK_DIV_EXP)
+#endif /* SMCLK_USE_DCOSC */
 
 /* Sets up the CPU and the clocks to a hard-coded configuration. The CPU will use the highest clock rate possible. */
 inline void cpuinit(void);

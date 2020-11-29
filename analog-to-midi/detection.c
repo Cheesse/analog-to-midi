@@ -10,7 +10,9 @@
 #include "defs.h"
 
 #include "detection.h"
+#include "duart.h"
 
+#include <math.h>
 #define GLOBAL_IQ 1
 #include "IQmathLib.h"
 
@@ -221,8 +223,6 @@ static const char binToMidi[128] = {
     0
 };
 
-static uint32_t rms = 0;
-
 /* Clamp magnitude to be at least 1. */
 #define magFloor(mag) ((mag) ? (mag) : 1)
 //uint32_t magFloor(uint32_t mag){
@@ -259,19 +259,20 @@ static void generateAggregateSpec(void){
         aggregate[i] = spectrum2[i - 32];
     }
 
-    unsigned int max = 16;
+    /*unsigned int max = 16;
 
     for (i = 0; i < 256; i++) if (aggregate[i] > max) max = aggregate[i];
 
     unsigned int shiftNum = 0;
 
     if (max != 16) {
-        while (max < 70) {
+        //while (max < 70) {
+        while (max < 40) {
             max <<= 1;
             shiftNum++;
         }
         for (i = 0; i < 256; i++) aggregate[i] <<= shiftNum;
-    }
+    }*/
 }
 
 void generateHPS(void){
@@ -627,18 +628,33 @@ void generateHPS(void){
 }
 
 void detectOutput(void){
+    uint32_t rms = 0;
     unsigned int i, j;
 
-    rms = 0;
     for (i = 0; i < 288; i++) rms += aggregate[i] * aggregate[i];
 
-    /* TODO: replace with IQdiv function. */
-    rms /= (288 * 288 / 50 / 50);
-    rms = (uint32_t)_IQsqrt((int32_t)rms << 1) >> 1;
+    //duartouts((const char*)&rms, 4);
+
+    //rms = rms / ((288 * 288) / 2500);
+    rms = rms >> 5;
+    //duartouts((const char*)&rms, 4);
+    rms = sqrtf(rms);
+
+    //duartouts((const char*)&rms, 4);
 
     uint32_t threshold = thresholds[0];
 
-    if (rms >= 15 /*.3 * 50*/ ) threshold = thresholds[(uint32_t)(rms - 15)];
+    if (rms >= 15) threshold = thresholds[rms - 15];
+    //rms = 0;
+    //for (i = 0; i < 288; i++) rms += aggregate[i] * aggregate[i];
+
+    //const float a = (288.0 * 288 / 50 / 50);
+    //rms /= a;
+    //rms = sqrtf(rms);//(uint32_t)_IQsqrt((int32_t)rms << 1) >> 1;
+
+    //uint32_t threshold = thresholds[0];
+
+    //if (rms >= 15 /*.3 * 50*/ ) threshold = thresholds[(uint32_t)(rms - 15)];
 
     //threshold = 2000;
 
@@ -679,7 +695,8 @@ void detectOutput(void){
     }
 
     for (i = 0; i < MIDI_POLYPHONY; i++) {
-        if (!((output[i][2] < 37 && HPS[output[i][2]] > threshold) || (output[i][2] > 36 && HPS[output[i][2]] > threshold))) {
+        if (!((output[i][2] < 37 && HPS[output[i][2]] > (threshold >> 1)) || (output[i][2] > 36 && HPS[output[i][2]] > (threshold >> 1)))) {
+        //if (!((output[i][2] < 37 && HPS[output[i][2]] > threshold) || (output[i][2] > 36 && HPS[output[i][2]] > threshold))) {
             output[i][0] = 0;
             output[i][1] = 0;
             output[i][2] = 0;
