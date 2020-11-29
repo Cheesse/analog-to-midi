@@ -21,7 +21,7 @@ static uint8_t *spectrum1;
 static uint8_t *spectrum2;
 static uint8_t aggregate[288];
 uint32_t HPS[88];
-
+static int sustainedFrames[6] = {0, 0, 0, 0, 0, 0, 0};
 static const uint32_t thresholds[66] = {
     725,
     760,
@@ -695,11 +695,12 @@ void detectOutput(void){
     }
 
     for (i = 0; i < MIDI_POLYPHONY; i++) {
-        if (!((output[i][2] < 37 && HPS[output[i][2]] > (threshold >> 1)) || (output[i][2] > 36 && HPS[output[i][2]] > (threshold >> 1)))) {
+        if (!((output[i][2] < 37 && HPS[output[i][2]] > (threshold >> 6)) || (output[i][2] > 36 && HPS[output[i][2]] > (threshold >> 6))) && sustainedFrames[i] > 6) {
         //if (!((output[i][2] < 37 && HPS[output[i][2]] > threshold) || (output[i][2] > 36 && HPS[output[i][2]] > threshold))) {
             output[i][0] = 0;
             output[i][1] = 0;
             output[i][2] = 0;
+            sustainedFrames[i] = 0;
         } else {
             for (j = 0; j < MIDI_POLYPHONY; j++) {
                 if (tempOut[j][0] == output[i][0] || tempOut[j][0] == (output[i][0] + 1)|| tempOut[j][0] == (output[i][0] - 1)) {
@@ -738,6 +739,8 @@ void detectOutput(void){
             isWritten = 0;
         }
     }
+
+    for (i = 0; i < MIDI_POLYPHONY; i++) if (output[i]) sustainedFrames[i]++;
 }
 
 void setSpectrum(uint8_t *topSpec, uint8_t *midSpec, uint8_t *lowSpec){
