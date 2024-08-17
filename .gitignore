@@ -57,3 +57,6 @@ Debug*
 .settings*
 empty*
 filter*
+.launches/
+targetConfigs/
+RemoteSystemsTempFiles/
