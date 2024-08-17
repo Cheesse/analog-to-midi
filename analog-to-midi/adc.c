@@ -73,6 +73,7 @@ void adcinit(adcfunc callback) {
      *  TAIFG  (Interrupt Flag)      = X (Don't care) */
     TA0CTL = TASSEL_2 | ID_0 | MC_0 | TAIE_0;
 
+#if ADC_REF_ENABLE
     /* Then set up the voltage reference output to output 1.2 V for signal biasing to ADC range. */
 
     /* REFCTL0: Voltage Reference A Control Register.
@@ -84,6 +85,7 @@ void adcinit(adcfunc callback) {
      *  REFON    (Reference Enable)    = 1 (Yes)
      */
     REFCTL0_L = REFVSEL_0 | REFTCOFF_1 | REFOUT_1 | REFON_1;
+#endif /* ADC_REF_ENABLE */
 
     /* Finally set up the ADC. */
 

@@ -86,7 +86,9 @@ void main(void) {
     ioinit();
 
     /* Init ADC input. */
+#if ADC_REF_ENABLE
     iomode(ADC_REF_PORT, ADC_REF_SEL0, ADC_REF_SEL1);
+#endif /* ADC_REF_ENABLE */
     iomode(IO_ADC_PORT, ADC_SEL0, ADC_SEL1);
 
     /* Init Debug UART output. */

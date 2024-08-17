@@ -16,6 +16,9 @@
 /* To change the ADC channel, you must change the port and pin, and vice versa. Refer to the datasheet. */
 #define ADC_CHANNEL 8
 
+/* Enable the ADC voltage reference output. */
+#define ADC_REF_ENABLE 1
+
 /* The ADC's sample rate (max 50 kHz). The actual sample rate may be slightly different. Must change adc.c with any change. */
 #define ADC_SAMPLE_RATE 12800
 
